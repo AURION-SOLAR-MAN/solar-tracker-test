@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar & KSEB Cloud Tracker</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --border: #cbd5e1;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; }
+    .container { max-width: 1450px; margin: 0 auto; display: none; }
+    
+    /* Login Lock Screen */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .login-card {
+      background: var(--card);
+      padding: 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+    }
+    .login-card h2 { font-size: 1.25rem; color: #1e293b; margin-bottom: 8px; }
+    .login-card p { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
+    .login-card input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .login-error { color: var(--danger); font-size: 0.8rem; margin-top: 8px; display: none; }
+
+    /* App Styles */
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    h1 { font-size: 1.5rem; color: #1e293b; }
+    
+    .status-sync { font-size: 0.85rem; color: #64748b; display: flex; align-items: center; gap: 8px; }
+    .spinner { display: none; width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--card);
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      border-left: 4px solid var(--primary);
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .metric-title { font-size: 0.70rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
+    .metric-val { font-size: 1.35rem; font-weight: bold; margin-top: 4px; }
+
+    .card {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 20px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    label { font-size: 0.8rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px; }
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .form-error {
+      color: var(--danger);
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-top: 8px;
+      display: none;
+    }
+    button.btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 14px;
+    }
+    button.btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .table-container { overflow-x: auto; background: var(--card); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; min-width: 1100px; }
+    th, td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    th { background: #f8fafc; color: #475569; font-weight: 600; }
+    tr:hover { background: #f8fafc; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-loan { background: #fef08a; color: #854d0e; }
+    .badge-overdue { background: #fee2e2; color: #991b1b; }
+    .badge-active { background: #dbeafe; color: #1e40af; }
+    .badge-co { background: #ede9fe; color: #6b21a8; }
+
+    .action-group { display: flex; gap: 6px; }
+    .action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 9px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .action-btn.edit { color: var(--primary); border-color: #93c5fd; }
+    .action-btn.del { color: var(--danger); border-color: #fca5a5; }
+
+    /* Modal Styling */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #ffffff;
+      border-radius: 10px;
+      max-width: 700px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; }
+  </style>
+</head>
+<body>
+
+  <!-- Pin Lock Screen -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-card">
+      <h2>Solar Tracker Access</h2>
+      <p>Enter your PIN to view data</p>
+      <input type="password" id="pinInput" maxlength="10" placeholder="••••" autocomplete="off">
+      <button class="btn-primary" style="width: 100%; margin-top: 4px;" onclick="checkPin()">Unlock Tracker</button>
+      <div class="login-error" id="loginError">Incorrect PIN. Try again.</div>
+    </div>
+  </div>
+
+  <!-- Main Application Container -->
+  <div class="container" id="mainContainer">
+    <div class="header-bar">
+      <h1>Solar & KSEB Live Tracker</h1>
+      <div class="status-sync">
+        <div id="spinner" class="spinner"></div>
+        <span id="syncText">Connecting...</span>
+        <button class="action-btn" onclick="fetchProjects()">Refresh</button>
+        <button class="action-btn" onclick="logout()" style="color:#64748b;">Lock / Logout</button>
+      </div>
+    </div>
+
+    <!-- Metrics Summary (Clickable to Filter) -->
+    <div class="metrics-grid">
+      <div class="metric-card" style="border-left-color: #0f172a; background: #f1f5f9;" onclick="filterByCardStage('ALL')">
+        <div class="metric-title" style="color: #0f172a;">Total Customers</div>
+        <div class="metric-val" id="count-total" style="color: #0f172a;">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #f59e0b;" onclick="filterByCardStage('Docs Pending')">
+        <div class="metric-title">Docs Pending</div>
+        <div class="metric-val" id="count-docs">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #6366f1;" onclick="filterByCardStage('Registration')">
+        <div class="metric-title">Registration</div>
+        <div class="metric-val" id="count-reg">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #ec4899;" onclick="filterByCardStage('Loan')">
+        <div class="metric-title">Loan Process</div>
+        <div class="metric-val" id="count-loan">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #3b82f6;" onclick="filterByCardStage('Bank Submission Pending')">
+        <div class="metric-title">Bank Submit</div>
+        <div class="metric-val" id="count-sub-pending">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #8b5cf6;" onclick="filterByCardStage('Loan Sanction Pending')">
+        <div class="metric-title">Loan Sanction</div>
+        <div class="metric-val" id="count-loan-pending">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #eab308;" onclick="filterByCardStage('Work Pending')">
+        <div class="metric-title">Work Pending</div>
+        <div class="metric-val" id="count-work">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #06b6d4;" onclick="filterByCardStage('KSEB Completion Pending')">
+        <div class="metric-title">KSEB Compl.</div>
+        <div class="metric-val" id="count-kseb">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #0284c7;" onclick="filterByCardStage('KSEB Online Completion')">
+        <div class="metric-title">Online Compl.</div>
+        <div class="metric-val" id="count-online">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #14b8a6;" onclick="filterByCardStage('Commissioning Pending')">
+        <div class="metric-title">Commissioning</div>
+        <div class="metric-val" id="count-comm">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #f97316;" onclick="filterByCardStage('Subsidy Request')">
+        <div class="metric-title">Subsidy Req.</div>
+        <div class="metric-val" id="count-subreq">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #10b981;" onclick="filterByCardStage('Subsidy Claimed')">
+        <div class="metric-title">Subsidy Claimed</div>
+        <div class="metric-val" id="count-subclaimed">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #ef4444;" onclick="filterByCardStage('OVERDUE')">
+        <div class="metric-title">Overdue Action</div>
+        <div class="metric-val" id="count-overdue">0</div>
+      </div>
+    </div>
+
+    <!-- Add Form -->
+    <div class="card">
+      <h2 style="font-size: 1.05rem; margin-bottom: 12px;">Add New Solar Customer</h2>
+      <form id="customerForm">
+        <div class="form-grid">
+          <div>
+            <label>Customer Name *</label>
+            <input type="text" id="custName" required placeholder="Full Name">
+          </div>
+          <div>
+            <label>Phone Number *</label>
+            <input type="tel" id="custPhone" required placeholder="9876543210">
+          </div>
+          <div>
+            <label>Email ID</label>
+            <input type="email" id="custEmail" placeholder="customer@gmail.com">
+          </div>
+          <div>
+            <label>C/O (Broker / Referral)</label>
+            <input type="text" id="custCO" placeholder="e.g. Aurion, Sky">
+          </div>
+          <div>
+            <label>Consumer Number *</label>
+            <input type="text" id="custConsumerNo" required placeholder="13-digit KSEB number">
+          </div>
+          <div>
+            <label>Plant Capacity (kW) *</label>
+            <input type="number" step="0.1" id="custCapacity" required placeholder="e.g. 3.3">
+          </div>
+          <div>
+            <label>Loan Required?</label>
+            <select id="custIsLoan" onchange="toggleLoanAmount('cust')">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div id="custLoanAmountBox" style="display: none;">
+            <label>Loan Amount (₹)</label>
+            <input type="number" id="custLoanAmount" placeholder="e.g. 150000">
+          </div>
+          <div>
+            <label>Address</label>
+            <input type="text" id="custAddress" placeholder="Location, Landmark">
+          </div>
+          <div>
+            <label>Docs Given Date</label>
+            <input type="date" id="custDocDate">
+          </div>
+          <div>
+            <label>Current Status</label>
+            <select id="custStatus">
+              <option value="Docs Pending">Docs Pending</option>
+              <option value="Registration">Registration</option>
+              <option value="Loan">Loan</option>
+              <option value="Bank Submission Pending">Bank Submission Pending</option>
+              <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+              <option value="Work Pending">Work Pending</option>
+              <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+              <option value="KSEB Online Completion">KSEB Online Completion</option>
+              <option value="Bank Completion Pending">Bank Completion Pending</option>
+              <option value="Commissioning Pending">Commissioning Pending</option>
+              <option value="Subsidy Request">Subsidy Request</option>
+              <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
+            </select>
+          </div>
+          <div>
+            <label>Next Step Due Date</label>
+            <input type="date" id="custDueDate">
+          </div>
+        </div>
+        <div class="form-error" id="addFormError"></div>
+        <button type="submit" id="submitBtn" class="btn-primary">Add Customer to Sheet</button>
+      </form>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <input type="text" id="searchFilter" placeholder="Search name, phone, or consumer #" style="max-width: 260px;">
+      <input type="text" id="coFilter" placeholder="Filter by C/O (e.g. aurion sky)" style="max-width: 250px;">
+      <select id="stageFilter" style="max-width: 220px;">
+        <option value="ALL">All Stages</option>
+        <option value="Docs Pending">Docs Pending</option>
+        <option value="Registration">Registration</option>
+        <option value="Loan">Loan</option>
+        <option value="Bank Submission Pending">Bank Submission Pending</option>
+        <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+        <option value="Work Pending">Work Pending</option>
+        <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+        <option value="KSEB Online Completion">KSEB Online Completion</option>
+        <option value="Bank Completion Pending">Bank Completion Pending</option>
+        <option value="Commissioning Pending">Commissioning Pending</option>
+        <option value="Subsidy Request">Subsidy Request</option>
+        <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
+      </select>
+    </div>
+
+    <!-- Records Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 45px; text-align: center;">#</th>
+            <th>Customer Info</th>
+            <th>C/O</th>
+            <th>Consumer No / Cap</th>
+            <th>Loan Details</th>
+            <th>Docs Date</th>
+            <th>Status</th>
+            <th>Due Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Edit Customer Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 style="font-size: 1.15rem;">Edit Customer Details</h2>
+        <button class="close-btn" onclick="closeEditModal()">&times;</button>
+      </div>
+      <form id="editForm">
+        <input type="hidden" id="editId">
+        <div class="form-grid">
+          <div>
+            <label>Customer Name *</label>
+            <input type="text" id="editName" required>
+          </div>
+          <div>
+            <label>Phone Number *</label>
+            <input type="tel" id="editPhone" required>
+          </div>
+          <div>
+            <label>Email ID</label>
+            <input type="email" id="editEmail">
+          </div>
+          <div>
+            <label>C/O (Broker / Referral)</label>
+            <input type="text" id="editCO">
+          </div>
+          <div>
+            <label>Consumer Number *</label>
+            <input type="text" id="editConsumerNo" required>
+          </div>
+          <div>
+            <label>Plant Capacity (kW) *</label>
+            <input type="number" step="0.1" id="editCapacity" required>
+          </div>
+          <div>
+            <label>Loan Required?</label>
+            <select id="editIsLoan" onchange="toggleLoanAmount('edit')">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div id="editLoanAmountBox" style="display: none;">
+            <label>Loan Amount (₹)</label>
+            <input type="number" id="editLoanAmount" placeholder="e.g. 150000">
+          </div>
+          <div>
+            <label>Address</label>
+            <input type="text" id="editAddress">
+          </div>
+          <div>
+            <label>Docs Given Date</label>
+            <input type="date" id="editDocDate">
+          </div>
+          <div>
+            <label>Current Status</label>
+            <select id="editStatus">
+              <option value="Docs Pending">Docs Pending</option>
+              <option value="Registration">Registration</option>
+              <option value="Loan">Loan</option>
+              <option value="Bank Submission Pending">Bank Submission Pending</option>
+              <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+              <option value="Work Pending">Work Pending</option>
+              <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+              <option value="KSEB Online Completion">KSEB Online Completion</option>
+              <option value="Bank Completion Pending">Bank Completion Pending</option>
+              <option value="Commissioning Pending">Commissioning Pending</option>
+              <option value="Subsidy Request">Subsidy Request</option>
+              <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
+            </select>
+          </div>
+          <div>
+            <label>Next Step Due Date</label>
+            <input type="date" id="editDueDate">
+          </div>
+        </div>
+        <div class="form-error" id="editFormError"></div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="submit" class="btn-primary" style="margin-top:0;">Save Changes</button>
+          <button type="button" class="action-btn" onclick="closeEditModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Paste your Google Web App URL here
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxlONZJphEJ4ZzTktZLokYnuVeAEQZ_UnAsw4sdPYumJBOotHtMcbakfrnYzNw0SYDr/exec";
+
+    let projects = [];
+    let selectedSpecialFilter = null;
+    let activeSessionPin = sessionStorage.getItem('solar_session_pin') || '';
+
+    const loginOverlay = document.getElementById('loginOverlay');
+    const pinInput = document.getElementById('pinInput');
+    const loginError = document.getElementById('loginError');
+    const mainContainer = document.getElementById('mainContainer');
+
+    const spinner = document.getElementById('spinner');
+    const syncText = document.getElementById('syncText');
+    const form = document.getElementById('customerForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const addFormError = document.getElementById('addFormError');
+    const tableBody = document.getElementById('tableBody');
+    const searchFilter = document.getElementById('searchFilter');
+    const coFilter = document.getElementById('coFilter');
+    const stageFilter = document.getElementById('stageFilter');
+
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editFormError = document.getElementById('editFormError');
+
+    function toggleLoanAmount(prefix) {
+      const isLoan = document.getElementById(prefix + 'IsLoan').value;
+      const amountBox = document.getElementById(prefix + 'LoanAmountBox');
+      if (isLoan === 'Yes') {
+        amountBox.style.display = 'block';
+      } else {
+        amountBox.style.display = 'none';
+        document.getElementById(prefix + 'LoanAmount').value = '';
+      }
+    }
+
+    function cleanConsumerNo(str) {
+      return String(str || '').replace(/[\s-]/g, '').toLowerCase();
+    }
+
+    function cleanDate(val) {
+      if (!val) return '';
+      if (typeof val === 'string') {
+        const clean = val.trim();
+        if (clean.includes('T')) return clean.split('T')[0];
+        if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+      }
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      return '';
+    }
+
+    // Sends the PIN input to Google's backend to verify
+    async function checkPin() {
+      const enteredPin = pinInput.value.trim();
+      if (!enteredPin) return;
+
+      loginError.style.display = 'none';
+      const unlockBtn = document.querySelector('.login-card button');
+      unlockBtn.disabled = true;
+      unlockBtn.innerText = "Checking...";
+
+      try {
+        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(enteredPin)}`);
+        const data = await res.json();
+
+        if (data.error === "UNAUTHORIZED") {
+          loginError.innerText = "Incorrect PIN. Try again.";
+          loginError.style.display = 'block';
+          pinInput.value = '';
+          pinInput.focus();
+        } else {
+          // Correct PIN verified by server!
+          activeSessionPin = enteredPin;
+          sessionStorage.setItem('solar_session_pin', enteredPin);
+          loginOverlay.style.display = 'none';
+          mainContainer.style.display = 'block';
+          processFetchedData(data);
+        }
+      } catch (err) {
+        console.error(err);
+        loginError.innerText = "Connection error. Try again.";
+        loginError.style.display = 'block';
+      } finally {
+        unlockBtn.disabled = false;
+        unlockBtn.innerText = "Unlock Tracker";
+      }
+    }
+
+    pinInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') checkPin();
+    });
+
+    function logout() {
+      sessionStorage.removeItem('solar_session_pin');
+      activeSessionPin = '';
+      projects = [];
+      render();
+      mainContainer.style.display = 'none';
+      loginOverlay.style.display = 'flex';
+      pinInput.value = '';
+      pinInput.focus();
+    }
+
+    function setLoading(isLoading, text = "Syncing...") {
+      spinner.style.display = isLoading ? 'inline-block' : 'none';
+      syncText.innerText = text;
+    }
+
+    function filterByCardStage(stageName) {
+      if (stageName === 'OVERDUE') {
+        stageFilter.value = 'ALL';
+        selectedSpecialFilter = 'OVERDUE';
+      } else {
+        selectedSpecialFilter = null;
+        stageFilter.value = stageName;
+      }
+      render();
+    }
+
+    function processFetchedData(data) {
+      const mapped = data.map(d => {
+        const lowKeys = {};
+        for (let k in d) {
+          lowKeys[k.trim().toLowerCase()] = d[k];
+        }
+
+        const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
+        const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
+
+        return {
+          id: lowKeys['id'] || Date.now(),
+          name: lowKeys['name'] || '',
+          phone: lowKeys['phone'] || '',
+          email: lowKeys['email'] || '',
+          address: lowKeys['address'] || '',
+          consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
+          capacity: lowKeys['capacity'] || '',
+          co: lowKeys['co'] || lowKeys['c/o'] || '',
+          docDate: cleanDate(rawDoc),
+          status: lowKeys['status'] || 'Docs Pending',
+          dueDate: cleanDate(rawDue),
+          isLoan: lowKeys['isloan'] || 'No',
+          loanAmount: lowKeys['loanamount'] || ''
+        };
+      });
+
+      projects = mapped.reverse();
+      render();
+      setLoading(false, "Synced");
+    }
+
+    async function fetchProjects() {
+      if (!activeSessionPin) return;
+      setLoading(true, "Fetching data...");
+      try {
+        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(activeSessionPin)}`);
+        const data = await res.json();
+        if (data.error === "UNAUTHORIZED") {
+          logout();
+          return;
+        }
+        processFetchedData(data);
+      } catch (err) {
+        console.error(err);
+        setLoading(false, "Sync Error");
+      }
+    }
+
+    async function postData(body) {
+      setLoading(true, "Saving...");
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        setLoading(false, "Saved");
+      } catch (err) {
+        console.error(err);
+        setLoading(false, "Save Failed");
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      addFormError.style.display = 'none';
+
+      const inputConsumer = document.getElementById('custConsumerNo').value.trim();
+      const cleanedInput = cleanConsumerNo(inputConsumer);
+
+      const existing = projects.find(p => cleanConsumerNo(p.consumerNo) === cleanedInput);
+      if (existing) {
+        addFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" already exists under customer "${existing.name}"!`;
+        addFormError.style.display = 'block';
+        alert(`Duplicate Consumer Number!\n\nConsumer No: ${inputConsumer} already belongs to ${existing.name}.`);
+        document.getElementById('custConsumerNo').focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+
+      const isLoanVal = document.getElementById('custIsLoan').value;
+      const loanAmtVal = isLoanVal === 'Yes' ? document.getElementById('custLoanAmount').value.trim() : '';
+
+      const newProj = {
+        id: Date.now(),
+        name: document.getElementById('custName').value.trim(),
+        phone: document.getElementById('custPhone').value.trim(),
+        email: document.getElementById('custEmail').value.trim(),
+        co: document.getElementById('custCO').value.trim(),
+        address: document.getElementById('custAddress').value.trim(),
+        consumerNo: inputConsumer,
+        capacity: document.getElementById('custCapacity').value.trim(),
+        docDate: document.getElementById('custDocDate').value || '',
+        status: document.getElementById('custStatus').value,
+        dueDate: document.getElementById('custDueDate').value || '',
+        isLoan: isLoanVal,
+        loanAmount: loanAmtVal
+      };
+
+      projects.unshift(newProj);
+      render();
+
+      await postData({ action: "ADD", data: newProj });
+      form.reset();
+      toggleLoanAmount('cust');
+      submitBtn.disabled = false;
+    });
+
+    function openEditModal(id) {
+      const proj = projects.find(p => String(p.id) === String(id));
+      if (!proj) return;
+
+      editFormError.style.display = 'none';
+      document.getElementById('editId').value = proj.id;
+      document.getElementById('editName').value = proj.name || '';
+      document.getElementById('editPhone').value = proj.phone || '';
+      document.getElementById('editEmail').value = proj.email || '';
+      document.getElementById('editCO').value = proj.co || '';
+      document.getElementById('editConsumerNo').value = proj.consumerNo || '';
+      document.getElementById('editCapacity').value = proj.capacity || '';
+      document.getElementById('editIsLoan').value = proj.isLoan || 'No';
+      document.getElementById('editLoanAmount').value = proj.loanAmount || '';
+      toggleLoanAmount('edit');
+      document.getElementById('editAddress').value = proj.address || '';
+      document.getElementById('editDocDate').value = proj.docDate || '';
+      document.getElementById('editStatus').value = proj.status || 'Docs Pending';
+      document.getElementById('editDueDate').value = proj.dueDate || '';
+
+      editModal.classList.add('open');
+    }
+
+    function closeEditModal() {
+      editModal.classList.remove('open');
+      editFormError.style.display = 'none';
+    }
+
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      editFormError.style.display = 'none';
+
+      const id = document.getElementById('editId').value;
+      const inputConsumer = document.getElementById('editConsumerNo').value.trim();
+      const cleanedInput = cleanConsumerNo(inputConsumer);
+
+      const duplicate = projects.find(p => String(p.id) !== String(id) && cleanConsumerNo(p.consumerNo) === cleanedInput);
+      if (duplicate) {
+        editFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" is already used by "${duplicate.name}"!`;
+        editFormError.style.display = 'block';
+        alert(`Duplicate Consumer Number!\n\nConsumer No: ${inputConsumer} is already assigned to ${duplicate.name}.`);
+        document.getElementById('editConsumerNo').focus();
+        return;
+      }
+
+      const proj = projects.find(p => String(p.id) === String(id));
+      if (proj) {
+        const isLoanVal = document.getElementById('editIsLoan').value;
+        const loanAmtVal = isLoanVal === 'Yes' ? document.getElementById('editLoanAmount').value.trim() : '';
+
+        proj.name = document.getElementById('editName').value.trim();
+        proj.phone = document.getElementById('editPhone').value.trim();
+        proj.email = document.getElementById('editEmail').value.trim();
+        proj.co = document.getElementById('editCO').value.trim();
+        proj.consumerNo = inputConsumer;
+        proj.capacity = document.getElementById('editCapacity').value.trim();
+        proj.isLoan = isLoanVal;
+        proj.loanAmount = loanAmtVal;
+        proj.address = document.getElementById('editAddress').value.trim();
+        proj.docDate = document.getElementById('editDocDate').value || '';
+        proj.status = document.getElementById('editStatus').value;
+        proj.dueDate = document.getElementById('editDueDate').value || '';
+
+        render();
+        closeEditModal();
+        await postData({ action: "UPDATE_ALL", data: proj });
+      }
+    });
+
+    async function updateStatus(id, newStatus) {
+      const proj = projects.find(p => String(p.id) === String(id));
+      if (proj) {
+        proj.status = newStatus;
+        render();
+        await postData({ action: "UPDATE_STATUS", id: id, status: newStatus });
+      }
+    }
+
+    async function updateDueDate(id, newDate) {
+      const proj = projects.find(p => String(p.id) === String(id));
+      if (proj) {
+        proj.dueDate = newDate;
+        render();
+        await postData({ action: "UPDATE_DUE_DATE", id: id, dueDate: newDate });
+      }
+    }
+
+    async function deleteProject(id) {
+      if (!confirm("Delete this customer from the sheet?")) return;
+      projects = projects.filter(p => String(p.id) !== String(id));
+      render();
+      await postData({ action: "DELETE", id: id });
+    }
+
+    function render() {
+      const q = searchFilter.value.toLowerCase();
+      const stage = stageFilter.value;
+      const today = cleanDate(new Date());
+
+      const coKeywords = coFilter.value
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter(k => k.length > 0);
+
+      let docsCount = 0, regCount = 0, loanCount = 0, subPending = 0, loanPending = 0, workPending = 0, ksebCount = 0, onlineCount = 0, commCount = 0, subReqCount = 0, subClaimedCount = 0, overdueCount = 0;
+
+      projects.forEach(p => {
+        if (p.status === 'Docs Pending') docsCount++;
+        if (p.status === 'Registration') regCount++;
+        if (p.status === 'Loan') loanCount++;
+        if (p.status === 'Bank Submission Pending') subPending++;
+        if (p.status === 'Loan Sanction Pending') loanPending++;
+        if (p.status === 'Work Pending') workPending++;
+        if (p.status === 'KSEB Completion Pending') ksebCount++;
+        if (p.status === 'KSEB Online Completion') onlineCount++;
+        if (p.status === 'Commissioning Pending') commCount++;
+        if (p.status === 'Subsidy Request') subReqCount++;
+        if (p.status === 'Subsidy Claimed') subClaimedCount++;
+        if (p.dueDate && p.dueDate < today && p.status !== 'Subsidy Claimed' && p.status !== 'Completed') overdueCount++;
+      });
+
+      document.getElementById('count-total').innerText = projects.length;
+      document.getElementById('count-docs').innerText = docsCount;
+      document.getElementById('count-reg').innerText = regCount;
+      document.getElementById('count-loan').innerText = loanCount;
+      document.getElementById('count-sub-pending').innerText = subPending;
+      document.getElementById('count-loan-pending').innerText = loanPending;
+      document.getElementById('count-work').innerText = workPending;
+      document.getElementById('count-kseb').innerText = ksebCount;
+      document.getElementById('count-online').innerText = onlineCount;
+      document.getElementById('count-comm').innerText = commCount;
+      document.getElementById('count-subreq').innerText = subReqCount;
+      document.getElementById('count-subclaimed').innerText = subClaimedCount;
+      document.getElementById('count-overdue').innerText = overdueCount;
+
+      const filtered = projects.filter(p => {
+        const matchesSearch = (p.name && p.name.toLowerCase().includes(q)) || 
+                              (p.phone && String(p.phone).includes(q)) || 
+                              (p.consumerNo && String(p.consumerNo).toLowerCase().includes(q));
+        
+        let matchesStage = stage === 'ALL' || p.status === stage;
+        if (selectedSpecialFilter === 'OVERDUE') {
+          const isCompleted = p.status === 'Subsidy Claimed' || p.status === 'Completed';
+          matchesStage = p.dueDate && p.dueDate < today && !isCompleted;
+        }
+
+        const customerCO = (p.co || '').toLowerCase();
+        const matchesCO = coKeywords.length === 0 || coKeywords.some(keyword => customerCO.includes(keyword));
+
+        return matchesSearch && matchesStage && matchesCO;
+      });
+
+      tableBody.innerHTML = filtered.map((p, index) => {
+        const isCompleted = p.status === 'Subsidy Claimed' || p.status === 'Completed';
+        const isOverdue = p.dueDate && p.dueDate < today && !isCompleted;
+        const dateBadge = p.dueDate 
+          ? `<span class="badge ${isOverdue ? 'badge-overdue' : 'badge-active'}">Due: ${p.dueDate}</span>` 
+          : `<span style="color:#94a3b8">None</span>`;
+
+        const hasLoan = String(p.isLoan).toLowerCase() === 'yes';
+        const loanDisplay = hasLoan
+          ? `<span class="badge badge-loan">Loan: Yes</span><br><small style="font-weight:600; color:#1e293b;">₹${Number(p.loanAmount || 0).toLocaleString('en-IN')}</small>`
+          : `<span style="color:#64748b; font-size:0.85rem;">Loan: No</span>`;
+
+        return `
+          <tr>
+            <td style="text-align: center; font-weight: bold; color: #64748b;">${index + 1}</td>
+            <td>
+              <strong>${p.name}</strong><br>
+              <small style="color:#475569;">📞 ${p.phone} ${p.email ? '| ✉️ ' + p.email : ''}</small><br>
+              <small style="color:#64748b;">📍 ${p.address || 'No address'}</small>
+            </td>
+            <td>
+              ${p.co ? `<span class="badge badge-co">${p.co}</span>` : `<span style="color:#94a3b8">—</span>`}
+            </td>
+            <td>
+              <strong>${p.consumerNo}</strong><br>
+              <small style="color:#64748b;">${p.capacity} kW</small>
+            </td>
+            <td>
+              ${loanDisplay}
+            </td>
+            <td>
+              ${p.docDate ? `<strong>${p.docDate}</strong>` : `<span style="color:#94a3b8">Not Set</span>`}
+            </td>
+            <td>
+              <select onchange="updateStatus('${p.id}', this.value)" style="font-size:0.8rem; padding:4px;">
+                <option value="Docs Pending" ${p.status === 'Docs Pending' ? 'selected' : ''}>Docs Pending</option>
+                <option value="Registration" ${p.status === 'Registration' ? 'selected' : ''}>Registration</option>
+                <option value="Loan" ${p.status === 'Loan' ? 'selected' : ''}>Loan</option>
+                <option value="Bank Submission Pending" ${p.status === 'Bank Submission Pending' ? 'selected' : ''}>Bank Submission Pending</option>
+                <option value="Loan Sanction Pending" ${p.status === 'Loan Sanction Pending' ? 'selected' : ''}>Loan Sanction Pending</option>
+                <option value="Work Pending" ${p.status === 'Work Pending' ? 'selected' : ''}>Work Pending</option>
+                <option value="KSEB Completion Pending" ${p.status === 'KSEB Completion Pending' ? 'selected' : ''}>KSEB Completion Pending</option>
+                <option value="KSEB Online Completion" ${p.status === 'KSEB Online Completion' ? 'selected' : ''}>KSEB Online Completion</option>
+                <option value="Bank Completion Pending" ${p.status === 'Bank Completion Pending' ? 'selected' : ''}>Bank Completion Pending</option>
+                <option value="Commissioning Pending" ${p.status === 'Commissioning Pending' ? 'selected' : ''}>Commissioning Pending</option>
+                <option value="Subsidy Request" ${p.status === 'Subsidy Request' ? 'selected' : ''}>Subsidy Request</option>
+                <option value="Subsidy Claimed" ${p.status === 'Subsidy Claimed' ? 'selected' : ''}>Subsidy Claimed (Final)</option>
+              </select>
+            </td>
+            <td>
+              ${dateBadge}<br>
+              <input type="date" value="${p.dueDate || ''}" onchange="updateDueDate('${p.id}', this.value)" style="margin-top:4px; font-size:0.75rem; width:130px;">
+            </td>
+            <td>
+              <div class="action-group">
+                <button class="action-btn edit" onclick="openEditModal('${p.id}')">Edit</button>
+                <button class="action-btn del" onclick="deleteProject('${p.id}')">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    searchFilter.addEventListener('input', render);
+    coFilter.addEventListener('input', render);
+    stageFilter.addEventListener('change', () => {
+      selectedSpecialFilter = null;
+      render();
+    });
+
+    if (activeSessionPin) {
+      loginOverlay.style.display = 'none';
+      mainContainer.style.display = 'block';
+      fetchProjects();
+    } else {
+      pinInput.focus();
+    }
+  </script>
+</body>
+</html>
