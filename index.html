@@ -471,12 +471,12 @@
   </div>
 
   <script>
-    // Paste your Google Web App URL here
+    // Google Web App URL
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxlONZJphEJ4ZzTktZLokYnuVeAEQZ_UnAsw4sdPYumJBOotHtMcbakfrnYzNw0SYDr/exec";
 
     let projects = [];
     let selectedSpecialFilter = null;
-    let activeSessionPin = sessionStorage.getItem('solar_session_pin') || '';
+    let activeSessionPin = ''; // Empty by default: requires PIN on every launch/refresh
 
     const loginOverlay = document.getElementById('loginOverlay');
     const pinInput = document.getElementById('pinInput');
@@ -549,12 +549,12 @@
           pinInput.value = '';
           pinInput.focus();
         } else {
-          // Correct PIN verified by server!
+          // Correct PIN verified by server
           activeSessionPin = enteredPin;
-          sessionStorage.setItem('solar_session_pin', enteredPin);
           loginOverlay.style.display = 'none';
           mainContainer.style.display = 'block';
           processFetchedData(data);
+          resetIdleTimer();
         }
       } catch (err) {
         console.error(err);
@@ -571,7 +571,6 @@
     });
 
     function logout() {
-      sessionStorage.removeItem('solar_session_pin');
       activeSessionPin = '';
       projects = [];
       render();
@@ -931,13 +930,31 @@
       render();
     });
 
-    if (activeSessionPin) {
-      loginOverlay.style.display = 'none';
-      mainContainer.style.display = 'block';
-      fetchProjects();
-    } else {
-      pinInput.focus();
+    // Inactivity and auto-lock mechanism
+    let idleTimer;
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      if (activeSessionPin) {
+        // Auto-lock after 3 minutes (180,000 ms) of no activity
+        idleTimer = setTimeout(() => {
+          logout();
+        }, 10 * 60 * 1000);
+      }
     }
+
+    ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, resetIdleTimer, false);
+    });
+
+    // Lock immediately if switching tabs, apps, or minimizing browser
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && activeSessionPin) {
+        logout();
+      }
+    });
+
+    // Start with PIN input focused
+    pinInput.focus();
   </script>
 </body>
 </html>
