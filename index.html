@@ -242,6 +242,14 @@
         <div class="metric-title">Loan Process</div>
         <div class="metric-val" id="count-loan">0</div>
       </div>
+      <div class="metric-card" style="border-left-color: #3b82f6;" onclick="filterByCardStage('Bank Submission Pending')">
+        <div class="metric-title">Bank Submit</div>
+        <div class="metric-val" id="count-sub-pending">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #8b5cf6;" onclick="filterByCardStage('Loan Sanction Pending')">
+        <div class="metric-title">Loan Sanction</div>
+        <div class="metric-val" id="count-loan-pending">0</div>
+      </div>
       <div class="metric-card" style="border-left-color: #10b981;" onclick="filterByCardStage('Feasibility Payment')">
         <div class="metric-title">Feasibility Pay</div>
         <div class="metric-val" id="count-feasibility">0</div>
@@ -345,9 +353,9 @@
               <option value="Docs Pending">Docs Pending</option>
               <option value="Registration">Registration</option>
               <option value="Loan">Loan</option>
-              <option value="Feasibility Payment">Feasibility Payment</option>
               <option value="Bank Submission Pending">Bank Submission Pending</option>
               <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+              <option value="Feasibility Payment">Feasibility Payment</option>
               <option value="Work Pending">Work Pending</option>
               <option value="KSEB Completion Pending">KSEB Completion Pending</option>
               <option value="KSEB Online Completion">KSEB Online Completion</option>
@@ -381,9 +389,9 @@
         <option value="Docs Pending">Docs Pending</option>
         <option value="Registration">Registration</option>
         <option value="Loan">Loan</option>
-        <option value="Feasibility Payment">Feasibility Payment</option>
         <option value="Bank Submission Pending">Bank Submission Pending</option>
         <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+        <option value="Feasibility Payment">Feasibility Payment</option>
         <option value="Work Pending">Work Pending</option>
         <option value="KSEB Completion Pending">KSEB Completion Pending</option>
         <option value="KSEB Online Completion">KSEB Online Completion</option>
@@ -506,9 +514,9 @@
               <option value="Docs Pending">Docs Pending</option>
               <option value="Registration">Registration</option>
               <option value="Loan">Loan</option>
-              <option value="Feasibility Payment">Feasibility Payment</option>
               <option value="Bank Submission Pending">Bank Submission Pending</option>
               <option value="Loan Sanction Pending">Loan Sanction Pending</option>
+              <option value="Feasibility Payment">Feasibility Payment</option>
               <option value="Work Pending">Work Pending</option>
               <option value="KSEB Completion Pending">KSEB Completion Pending</option>
               <option value="KSEB Online Completion">KSEB Online Completion</option>
@@ -677,7 +685,6 @@
     }
 
     function processFetchedData(response) {
-      // Handles both {projects, tasks} payload structure and backward-compatible raw array
       const rawProjects = Array.isArray(response) ? response : (response.projects || []);
       const rawTasks = response.tasks || [];
 
@@ -1009,14 +1016,16 @@
         .split(/[\s,]+/)
         .filter(k => k.length > 0);
 
-      let docsCount = 0, regCount = 0, loanCount = 0, feasCount = 0, workPending = 0;
-      let ksebCount = 0, onlineCount = 0, commCount = 0, subReqCount = 0, subClaimedCount = 0;
-      let delayedCount = 0, overdueCount = 0;
+      let docsCount = 0, regCount = 0, loanCount = 0, subPending = 0, loanPending = 0;
+      let feasCount = 0, workPending = 0, ksebCount = 0, onlineCount = 0, commCount = 0;
+      let subReqCount = 0, subClaimedCount = 0, delayedCount = 0, overdueCount = 0;
 
       projects.forEach(p => {
         if (p.status === 'Docs Pending') docsCount++;
         if (p.status === 'Registration') regCount++;
         if (p.status === 'Loan') loanCount++;
+        if (p.status === 'Bank Submission Pending') subPending++;
+        if (p.status === 'Loan Sanction Pending') loanPending++;
         if (p.status === 'Feasibility Payment') feasCount++;
         if (p.status === 'Work Pending') workPending++;
         if (p.status === 'KSEB Completion Pending') ksebCount++;
@@ -1032,6 +1041,8 @@
       document.getElementById('count-docs').innerText = docsCount;
       document.getElementById('count-reg').innerText = regCount;
       document.getElementById('count-loan').innerText = loanCount;
+      document.getElementById('count-sub-pending').innerText = subPending;
+      document.getElementById('count-loan-pending').innerText = loanPending;
       document.getElementById('count-feasibility').innerText = feasCount;
       document.getElementById('count-work').innerText = workPending;
       document.getElementById('count-kseb').innerText = ksebCount;
@@ -1114,9 +1125,9 @@
                 <option value="Docs Pending" ${p.status === 'Docs Pending' ? 'selected' : ''}>Docs Pending</option>
                 <option value="Registration" ${p.status === 'Registration' ? 'selected' : ''}>Registration</option>
                 <option value="Loan" ${p.status === 'Loan' ? 'selected' : ''}>Loan</option>
-                <option value="Feasibility Payment" ${p.status === 'Feasibility Payment' ? 'selected' : ''}>Feasibility Payment</option>
                 <option value="Bank Submission Pending" ${p.status === 'Bank Submission Pending' ? 'selected' : ''}>Bank Submission Pending</option>
                 <option value="Loan Sanction Pending" ${p.status === 'Loan Sanction Pending' ? 'selected' : ''}>Loan Sanction Pending</option>
+                <option value="Feasibility Payment" ${p.status === 'Feasibility Payment' ? 'selected' : ''}>Feasibility Payment</option>
                 <option value="Work Pending" ${p.status === 'Work Pending' ? 'selected' : ''}>Work Pending</option>
                 <option value="KSEB Completion Pending" ${p.status === 'KSEB Completion Pending' ? 'selected' : ''}>KSEB Completion Pending</option>
                 <option value="KSEB Online Completion" ${p.status === 'KSEB Online Completion' ? 'selected' : ''}>KSEB Online Completion</option>
