@@ -547,6 +547,7 @@
   <script>
     // Paste your Google Web App URL here
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwzoGDSKZuuupll2CnW5BT_3YVDUiNuiwKFZrJMrBNL9uGwKzSfOE5fyiRor70sH3pM/exec";
+    const SESSION_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
     let projects = [];
     let tasks = [];
@@ -581,6 +582,45 @@
     const taskForm = document.getElementById('taskForm');
     const notifBadge = document.getElementById('notifBadge');
     const taskList = document.getElementById('taskList');
+
+    // --- Session Persistence Management ---
+    function saveSession(pin) {
+      activeSessionPin = pin;
+      const expiry = Date.now() + SESSION_DURATION_MS;
+      localStorage.setItem('solar_pin', pin);
+      localStorage.setItem('solar_session_expiry', expiry.toString());
+    }
+
+    function refreshSessionTimer() {
+      if (!activeSessionPin) return;
+      const expiry = Date.now() + SESSION_DURATION_MS;
+      localStorage.setItem('solar_session_expiry', expiry.toString());
+    }
+
+    function isSessionValid() {
+      const pin = localStorage.getItem('solar_pin');
+      const expiryStr = localStorage.getItem('solar_session_expiry');
+      if (!pin || !expiryStr) return false;
+      const expiry = parseInt(expiryStr, 10);
+      if (Date.now() < expiry) {
+        activeSessionPin = pin;
+        return true;
+      }
+      return false;
+    }
+
+    function logout() {
+      activeSessionPin = '';
+      localStorage.removeItem('solar_pin');
+      localStorage.removeItem('solar_session_expiry');
+      projects = [];
+      tasks = [];
+      render();
+      mainContainer.style.display = 'none';
+      loginOverlay.style.display = 'flex';
+      pinInput.value = '';
+      pinInput.focus();
+    }
 
     function toggleLoanAmount(prefix) {
       const isLoan = document.getElementById(prefix + 'IsLoan').value;
@@ -637,11 +677,10 @@
           pinInput.value = '';
           pinInput.focus();
         } else {
-          activeSessionPin = enteredPin;
+          saveSession(enteredPin);
           loginOverlay.style.display = 'none';
           mainContainer.style.display = 'block';
           processFetchedData(data);
-          resetIdleTimer();
         }
       } catch (err) {
         console.error(err);
@@ -656,17 +695,6 @@
     pinInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') checkPin();
     });
-
-    function logout() {
-      activeSessionPin = '';
-      projects = [];
-      tasks = [];
-      render();
-      mainContainer.style.display = 'none';
-      loginOverlay.style.display = 'flex';
-      pinInput.value = '';
-      pinInput.focus();
-    }
 
     function setLoading(isLoading, text = "Syncing...") {
       spinner.style.display = isLoading ? 'inline-block' : 'none';
@@ -731,7 +759,7 @@
     }
 
     async function fetchProjects() {
-      if (!activeSessionPin) return;
+      if (!isSessionValid()) return;
       setLoading(true, "Fetching data...");
       try {
         const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(activeSessionPin)}`);
@@ -1092,7 +1120,7 @@
           : `<span style="color:#64748b; font-size:0.85rem;">Loan: No</span>`;
 
         const dcrBadge = (p.dcrType === 'Non-DCR') 
-          ? `<span class="badge badge-nondcr">Non-DCR</span>`
+          ? `<span class="badge badge-nondcr">Non-DCR</span>` 
           : `<span class="badge badge-dcr">DCR</span>`;
 
         const isExpanded = expandedCustomerIds.has(String(p.id));
@@ -1185,28 +1213,37 @@
       render();
     }));
 
-    // Inactivity and auto-lock mechanism
-    let idleTimer;
-    function resetIdleTimer() {
-      clearTimeout(idleTimer);
-      if (activeSessionPin) {
-        idleTimer = setTimeout(() => {
-          logout();
-        }, 10 * 60 * 1000); // 10 minutes
-      }
-    }
-
-    ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, resetIdleTimer, false);
+    // Refresh 10-minute timer whenever user interacts with the app
+    ['click', 'touchstart', 'keydown', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, refreshSessionTimer, { passive: true });
     });
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && activeSessionPin) {
+    // Check expiration every 5 seconds (handles idle time while tab is open)
+    setInterval(() => {
+      if (activeSessionPin && !isSessionValid()) {
+        logout();
+      }
+    }, 5000);
+
+    // Auto-login on page load or return from background/screen-off
+    window.addEventListener('pageshow', () => {
+      if (isSessionValid()) {
+        loginOverlay.style.display = 'none';
+        mainContainer.style.display = 'block';
+        if (projects.length === 0) fetchProjects();
+      } else if (activeSessionPin) {
         logout();
       }
     });
 
-    pinInput.focus();
+    // Immediate check on initial page load
+    if (isSessionValid()) {
+      loginOverlay.style.display = 'none';
+      mainContainer.style.display = 'block';
+      fetchProjects();
+    } else {
+      pinInput.focus();
+    }
   </script>
 </body>
 </html>
